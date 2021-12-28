@@ -5,10 +5,11 @@ const TO_BE_ARCHIVED_FOLDER_ID = '';
 
 
 const ADMIN_EMAIL = '';
-const NOTIFICATION_ADDRESSES = ADMIN_EMAIL + ', ';
+const MAIN_AGENT_ADDRESS = '';
+const NOTIFICATION_ADDRESSES = ADMIN_EMAIL + MAIN_AGENT_ADDRESS + ', ';
 
 
-const PRIVATE_INFO = [GESTIONE_LAVORI_SPREADSHEET_ID, LAVORI_IN_CORSO_FOLDER_ID, TO_BE_INVOICED_FOLDER_ID, TO_BE_ARCHIVED_FOLDER_ID, ADMIN_EMAIL, NOTIFICATION_ADDRESSES];
+const PRIVATE_INFO = [GESTIONE_LAVORI_SPREADSHEET_ID, LAVORI_IN_CORSO_FOLDER_ID, TO_BE_INVOICED_FOLDER_ID, TO_BE_ARCHIVED_FOLDER_ID, ADMIN_EMAIL, MAIN_AGENT_ADDRESS, NOTIFICATION_ADDRESSES];
 
 //
 //
@@ -121,15 +122,14 @@ const RELATED_FILES_REF_TO_LAVORI_COLUMN = 2;
 
 
 function test() {
-  const address = 'surfer.vortex@gmail.com';
+  const address = '';
   const message = 'test message';
 
   sendEmailTo(address, message);
 }
 
 
-function sendEmailToCula(lavoroObject) {
-  const address = 'chiarapazzaglia00@gmail.com';
+function sendEmailToAgent(lavoroObject, address) {
   const subject = 'Notifica archiviazione lavoro';
   const lavoroName = getWhatFolderNameShouldBeForThisLavoro(lavoroObject.row);
 
@@ -586,7 +586,7 @@ function getAllFoldersWithRef(lavoroRef) {
 function moveFolderToCorrectParentFolder(folder, lavoroObject) {
   if(lavoroObject.stato === 'Da Archiviare') {
     if(LAVORI_TABLE[lavoroObject.row - 1][LAVORI_NOTE_LAVORO_COLUMN - 1].toLowerCase().includes('chiara')) {
-      sendEmailToCula(lavoroObject);
+      sendEmailToAgent(lavoroObject, MAIN_AGENT_ADDRESS);
     }
     createLogFileForThisLavoro(lavoroObject.ref);
     folder.moveTo(DriveApp.getFolderById(TO_BE_ARCHIVED_FOLDER_ID));
