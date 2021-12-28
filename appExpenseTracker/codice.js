@@ -50,6 +50,7 @@ const CARBURANTE_TABLE = CARBURANTE_SHEET.getRange(1, 1, CARBURANTE_SHEET.getLas
 const CARBURANTE_STATS_TABLE = CARBURANTE_STATS_SHEET.getRange(1, 1, 1, CARBURANTE_STATS_SHEET.getLastColumn()).getValues();
 
 // Little adapter to log in Apps Scripts interface
+// wait a sec, is this useful at all? :/
 const console = {
   log: (string) => {Logger.log(string)}
 }
