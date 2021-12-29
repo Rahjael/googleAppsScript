@@ -19,7 +19,7 @@ const PRIVATE_INFO = [SPREADSHEET_ID, XML_FOLDER_ID];
 // Some variables have messy names. This is to be consistent with the xml fields.
 // Code mixes Italian and English so the banking vocabulary is easier to deal with. I apologise.
 
-if(PRIVATE_INFO.any( data => data === '' || data === undefined)) {
+if(PRIVATE_INFO.some( data => data === '' || data === undefined)) {
   throw Error('Did you forget to fill in private info?');
 }
 

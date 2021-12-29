@@ -40,7 +40,7 @@ const PRIVATE_INFO = [GESTIONE_LAVORI_SPREADSHEET_ID, LAVORI_IN_CORSO_FOLDER_ID,
 // between what the code does and the parts of the 
 // spreadsheet that are affected.
 
-if(PRIVATE_INFO.any( data => data === '' || data === undefined)) {
+if(PRIVATE_INFO.some( data => data === '' || data === undefined)) {
   throw Error('Did you forget to fill in private info?');
 }
 
