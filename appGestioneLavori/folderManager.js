@@ -11,6 +11,11 @@ const NOTIFICATION_ADDRESSES = [ADMIN_EMAIL, MAIN_AGENT_EMAIL];
 
 const PRIVATE_INFO = [GESTIONE_LAVORI_SPREADSHEET_ID, LAVORI_IN_CORSO_FOLDER_ID, TO_BE_INVOICED_FOLDER_ID, TO_BE_ARCHIVED_FOLDER_ID, ADMIN_EMAIL, MAIN_AGENT_EMAIL, NOTIFICATION_ADDRESSES];
 
+
+
+
+
+
 //
 //
 //
@@ -51,7 +56,6 @@ if(PRIVATE_INFO.some( data => data === '' || data === undefined)) {
 //
 const TRIGGER_SHOULD_BE_ACTIVE = true; // Affects entire script
 const SHOULD_LOG_EVERY_EVENT = true;
-
 const SHOULD_AUTOCREATE_FOLDERS = true; // Automatically create folders in Drive if no ID is found
 const SHOULD_AUTOEDIT_FOLDERS = true; // Automatically rename folders with found ID but different name
 const SHOULD_CHECK_LAVORI_SHEET_EDITS = true; // Currently not in use
@@ -78,6 +82,8 @@ const LAVORI_SHEET_NAME = "LAVORI";
 const CLIENTI_SHEET_NAME = "CLIENTI";
 const LOGS_SHEET_NAME = "LOG";
 const RELATED_FILES_SHEET_NAME = "FILE COLLEGATI";
+const ARCHIVIO_LAVORI_SHEET_NAME = 'ARCHIVIO_LAVORI';
+const ARCHIVIO_LOG_SHEET_NAME = 'ARCHIVIO_LOG';
 
 const TO_BE_ARCHIVED_FOLDER_NAME = "AAAAA DA ARCHIVIARE";
 const TO_BE_INVOICED_FOLDER_NAME = "AAAAA DA FATTURARE";
@@ -122,14 +128,12 @@ const RELATED_FILES_REF_TO_LAVORI_COLUMN = 2;
 
 
 function test() {
-  const address = ADMIN_EMAIL;
-  const message = 'test message';
-
-  sendEmailTo(address, message);
+  
+  Logger.log(createLavoroObjectFromRef('00b467d7'));
 }
 
 
-function sendEmailToCula(lavoroObject) {
+function sendEmailToMainAgent(lavoroObject) {
   const address = MAIN_AGENT_EMAIL;
   const subject = 'Notifica archiviazione lavoro';
   const lavoroName = getWhatFolderNameShouldBeForThisLavoro(lavoroObject.row);
@@ -144,8 +148,7 @@ function sendEmailToCula(lavoroObject) {
 }
 
 
-function sendEmailTo(addresses, message) {
-  const subject = 'Notifica da Duale App Gestione Lavori';
+function sendEmailTo(addresses, message, subject = 'Notifica da Duale App Gestione Lavori') {
   MailApp.sendEmail(addresses, subject, message);
   Logger.log(`Email sent to ${addresses}`);
 }
@@ -522,18 +525,57 @@ function checkFoldersAndIDs() {
 }
 
 
+
+function createLavoroObjectFromRef(lavoroRef) {
+  if(typeof lavoroRef != 'string') {
+    throw Error('createLavoroObjectFromRef(): invalid argument');
+  }
+
+  const lavoroRow = (() => {
+    for(let i = 0; i < LAVORI_TABLE.length; i++) {
+      if(LAVORI_TABLE[i][LAVORI_ID_COLUMN - 1] === lavoroRef) {
+        return i + 1;
+      }
+    }
+    if(!row) {
+      throw Error(`LAVORO not found for this ref: ${lavoroRef}`);
+  }})();
+
+  const lavoroObject = createLavoroObjectFromLavoroRow(lavoroRow);
+  
+  return lavoroObject;
+}
+
+
+
 function createLavoroObjectFromLavoroRow(lavoroRow) {
   if(typeof lavoroRow != 'number' || lavoroRow < 2) {
     throw Error('invalid row');
   }
+
+  const refToCliente = LAVORI_TABLE[lavoroRow - 1][LAVORI_REF_TO_CLIENTE_COLUMN - 1];
+  const clienteName = (() => {
+    for(let i = 0; i < CLIENTI_TABLE.length; i++) {
+      if(CLIENTI_TABLE[i][CLIENTI_ID_COLUMN - 1] === refToCliente) {
+        return CLIENTI_TABLE[i][CLIENTI_NOME_COLUMN - 1];
+      }
+    }
+    if(!row) {
+      throw Error(`LAVORO not found for this ref: ${lavoroRef}`);
+  }})();
+
   const lavoroObject = {
     row: lavoroRow,
     ref: LAVORI_TABLE[lavoroRow - 1][LAVORI_ID_COLUMN - 1],
-    refToCliente: LAVORI_TABLE[lavoroRow - 1][LAVORI_REF_TO_CLIENTE_COLUMN - 1],
+    refToCliente: refToCliente,
+    cliente: clienteName,
+    riferimento: LAVORI_TABLE[lavoroRow - 1][LAVORI_RIFERIMENTO_COLUMN - 1],
     stato: LAVORI_TABLE[lavoroRow - 1][LAVORI_STATO_COLUMN - 1]
   }
+
   return lavoroObject;
 }
+
 
 function printLavoroInfo(lavoroObject) {
   const whatFolderNameShouldBe = getWhatFolderNameShouldBeForThisLavoro(lavoroObject.row);
@@ -587,7 +629,7 @@ function getAllFoldersWithRef(lavoroRef) {
 function moveFolderToCorrectParentFolder(folder, lavoroObject) {
   if(lavoroObject.stato === 'Da Archiviare') {
     if(LAVORI_TABLE[lavoroObject.row - 1][LAVORI_NOTE_LAVORO_COLUMN - 1].toLowerCase().includes('chiara')) {
-      sendEmailToCula(lavoroObject);
+      sendEmailToMainAgent(lavoroObject);
     }
     createLogFileForThisLavoro(lavoroObject.ref);
     folder.moveTo(DriveApp.getFolderById(TO_BE_ARCHIVED_FOLDER_ID));
@@ -771,5 +813,4 @@ function onSheetEdits(e) {
 
   Logger.log("End of trigger in file 'triggers.gs'");
 }
-
 
