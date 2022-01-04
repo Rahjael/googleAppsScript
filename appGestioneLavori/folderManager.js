@@ -5,11 +5,11 @@ const TO_BE_ARCHIVED_FOLDER_ID = '';
 
 
 const ADMIN_EMAIL = '';
-const MAIN_AGENT_ADDRESS = '';
-const NOTIFICATION_ADDRESSES = ADMIN_EMAIL + MAIN_AGENT_ADDRESS + ', ';
+const MAIN_AGENT_EMAIL = '';
+const NOTIFICATION_ADDRESSES = [ADMIN_EMAIL, MAIN_AGENT_EMAIL];
 
 
-const PRIVATE_INFO = [GESTIONE_LAVORI_SPREADSHEET_ID, LAVORI_IN_CORSO_FOLDER_ID, TO_BE_INVOICED_FOLDER_ID, TO_BE_ARCHIVED_FOLDER_ID, ADMIN_EMAIL, MAIN_AGENT_ADDRESS, NOTIFICATION_ADDRESSES];
+const PRIVATE_INFO = [GESTIONE_LAVORI_SPREADSHEET_ID, LAVORI_IN_CORSO_FOLDER_ID, TO_BE_INVOICED_FOLDER_ID, TO_BE_ARCHIVED_FOLDER_ID, ADMIN_EMAIL, MAIN_AGENT_EMAIL, NOTIFICATION_ADDRESSES];
 
 //
 //
@@ -122,14 +122,15 @@ const RELATED_FILES_REF_TO_LAVORI_COLUMN = 2;
 
 
 function test() {
-  const address = '';
+  const address = ADMIN_EMAIL;
   const message = 'test message';
 
   sendEmailTo(address, message);
 }
 
 
-function sendEmailToAgent(lavoroObject, address) {
+function sendEmailToCula(lavoroObject) {
+  const address = MAIN_AGENT_EMAIL;
   const subject = 'Notifica archiviazione lavoro';
   const lavoroName = getWhatFolderNameShouldBeForThisLavoro(lavoroObject.row);
 
@@ -172,7 +173,7 @@ function checkClientiDuplicates() {
   if(results.exactDuplicates.length > 0) {
     const duplicatesFoundMessage = `Exact duplicates found: \n\t${results.exactDuplicates.reduce( (acc, current) => acc + '\n\t' + current)}`;
 
-    sendEmailTo(NOTIFICATION_ADDRESSES, duplicatesFoundMessage);
+    sendEmailTo(NOTIFICATION_ADDRESSES.join(', '), duplicatesFoundMessage);
   }
 }
 
@@ -586,7 +587,7 @@ function getAllFoldersWithRef(lavoroRef) {
 function moveFolderToCorrectParentFolder(folder, lavoroObject) {
   if(lavoroObject.stato === 'Da Archiviare') {
     if(LAVORI_TABLE[lavoroObject.row - 1][LAVORI_NOTE_LAVORO_COLUMN - 1].toLowerCase().includes('chiara')) {
-      sendEmailToAgent(lavoroObject, MAIN_AGENT_ADDRESS);
+      sendEmailToCula(lavoroObject);
     }
     createLogFileForThisLavoro(lavoroObject.ref);
     folder.moveTo(DriveApp.getFolderById(TO_BE_ARCHIVED_FOLDER_ID));
@@ -753,7 +754,7 @@ function onSheetEdits(e) {
         if(SHOULD_AUTOCREATE_FOLDERS) {
           if(sheetName == LOGS_SHEET_NAME) {
             Logger.log("Skipping new folder creation related to log edit. Folder probably already exists");
-            throw Error(`Edited log row but no folder found. Check this lavoro: ${lavoriToWorkOn[0].ref}`);
+            //throw Error(`Edited log row but no folder found. Check this lavoro: ${lavoriToWorkOn[0].ref}`);
           }
           moveFolderToCorrectParentFolder(createLavoroFolder(lavoriToWorkOn[i]), lavoriToWorkOn[i]);
         }
