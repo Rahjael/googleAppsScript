@@ -798,7 +798,9 @@ function onSheetEdits(e) {
             Logger.log("Skipping new folder creation related to log edit. Folder probably already exists");
             //throw Error(`Edited log row but no folder found. Check this lavoro: ${lavoriToWorkOn[0].ref}`);
           }
-          moveFolderToCorrectParentFolder(createLavoroFolder(lavoriToWorkOn[i]), lavoriToWorkOn[i]);
+          else {
+            moveFolderToCorrectParentFolder(createLavoroFolder(lavoriToWorkOn[i]), lavoriToWorkOn[i]);
+          }
         }
       }
       else if(lavoroFolders.length === 1) {
