@@ -127,9 +127,8 @@ const LOG_REF_TO_LAVORI_COLUMN = 2;
 const RELATED_FILES_REF_TO_LAVORI_COLUMN = 2;
 
 
-function test() {
-  
-  Logger.log(createLavoroObjectFromRef('00b467d7'));
+function test() {  
+  Logger.log(getFilesListForThisLavoro('b76f9fc8'));
 }
 
 
@@ -152,6 +151,52 @@ function sendEmailTo(addresses, message, subject = 'Notifica da Duale App Gestio
   MailApp.sendEmail(addresses, subject, message);
   Logger.log(`Email sent to ${addresses}`);
 }
+
+
+function getFilesListForThisLavoro(lavoroRef) {
+  // Returns an array of strings
+
+  const foundFolders = getAllFoldersWithRef(lavoroRef);
+
+  if(foundFolders.length === 0) {
+    throw Error('ERROR: getFilesListForThisLavoro() found 0 folders');
+  }
+  if(foundFolders.length > 1) {
+    throw Error('ERROR: getFilesListForThisLavoro() found more than 1 folders');
+  }
+
+  const fileIterator = foundFolders[0].getFiles();
+  const filenames = [];
+
+  while (fileIterator.hasNext()) {
+    let file = fileIterator.next();
+    filenames.push(file.getName());
+  }
+
+  return filenames;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 function checkClientiDuplicates() {
@@ -194,7 +239,6 @@ function deleteEmptyRowsFromEverySheet() {
     return false;
   }
 
-  let removedRows = 0;
 
   //
   // OLD VERSION
@@ -224,7 +268,9 @@ function deleteEmptyRowsFromEverySheet() {
   //
   // NEW VERSION
   // 
+  let finalReport = '';
   sheets.forEach( sheet => {
+    let removedRows = 0;
     let containsEmptyRows = true;
     let currentColumnA;
 
@@ -233,6 +279,9 @@ function deleteEmptyRowsFromEverySheet() {
       let startAt;
       let howMany = 0;
 
+      // XXX Can I optimize this call? Not sure. I would like to reduce this to a single call,
+      // the problem is that every deleteRows(start, howmany) would change the indexes, resulting in disaster.
+      // There is no other API that I know of to delete rows in bulk. So I have to stick to this for the time being.
       currentColumnA = sheet.getRange(1, 1, sheet.getMaxRows(), 1).getValues(); // This is a 2d array[rows][columns]
 
       for(let i = 0; i < currentColumnA.length; i++) {
@@ -255,24 +304,19 @@ function deleteEmptyRowsFromEverySheet() {
           }
         }
       }
-      
+
       if(howMany != 0) {
         removedRows += howMany;
         // Logger.log(`attempting to delete ${startAt}, ${howMany}`);
         sheet.deleteRows(startAt, howMany);
-        Logger.log(`Removed ${removedRows} rows in ${Date.now() - started} ms from script start`);
+        //Logger.log(`Removed ${removedRows} rows in ${Date.now() - started} ms from script start`);
       }
     }
+    finalReport += `\nRemoved ${removedRows} rows from sheet ${sheet.getName()} in ${Date.now() - started} ms from script start`;
   });
 
+  sendEmailTo(MAIN_NOTIFICATION_EMAIL, finalReport, 'App Gestione Lavori database cleanup');
   Logger.log(`Empty rows cleanup done in ${Date.now() - started} ms`);
-
-
-  // I use a throw to log this process. The reason is appSheet automatically sends me an email
-  // whenever anything throws...
-  // it's dirty, but far cheaper than writing an actual emailing function for the same result.
-  // const logMessage = `Cleanup complete`;
-  // throw Error(logMessage);
 }
 
 
@@ -815,4 +859,3 @@ function onSheetEdits(e) {
 
   Logger.log("End of trigger in file 'triggers.gs'");
 }
-
