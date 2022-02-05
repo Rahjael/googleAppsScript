@@ -3,14 +3,13 @@ const LAVORI_IN_CORSO_FOLDER_ID = '';
 const TO_BE_INVOICED_FOLDER_ID = '';
 const TO_BE_ARCHIVED_FOLDER_ID = '';
 
+const FOLDERNAMES_TO_IGNORE = [''];
+
 
 const ADMIN_EMAIL = '';
 const MAIN_AGENT_EMAIL = '';
-const NOTIFICATION_ADDRESSES = [ADMIN_EMAIL, MAIN_AGENT_EMAIL];
-
-
-const PRIVATE_INFO = [GESTIONE_LAVORI_SPREADSHEET_ID, LAVORI_IN_CORSO_FOLDER_ID, TO_BE_INVOICED_FOLDER_ID, TO_BE_ARCHIVED_FOLDER_ID, ADMIN_EMAIL, MAIN_AGENT_EMAIL, NOTIFICATION_ADDRESSES];
-
+const MAIN_NOTIFICATION_EMAIL = '';
+const NOTIFICATION_ADDRESSES = [ADMIN_EMAIL, MAIN_AGENT_EMAIL, MAIN_NOTIFICATION_EMAIL];
 
 
 
@@ -45,6 +44,9 @@ const PRIVATE_INFO = [GESTIONE_LAVORI_SPREADSHEET_ID, LAVORI_IN_CORSO_FOLDER_ID,
 // between what the code does and the parts of the 
 // spreadsheet that are affected.
 
+
+const PRIVATE_INFO = [GESTIONE_LAVORI_SPREADSHEET_ID, LAVORI_IN_CORSO_FOLDER_ID, TO_BE_INVOICED_FOLDER_ID, TO_BE_ARCHIVED_FOLDER_ID, ADMIN_EMAIL, MAIN_AGENT_EMAIL, ...NOTIFICATION_ADDRESSES];
+
 if(PRIVATE_INFO.some( data => data === '' || data === undefined)) {
   throw Error('Did you forget to fill in private info?');
 }
@@ -54,6 +56,8 @@ if(PRIVATE_INFO.some( data => data === '' || data === undefined)) {
 //
 // Debugging config
 //
+let IS_DEBUGGING_EXECUTION = false;
+
 const TRIGGER_SHOULD_BE_ACTIVE = true; // Affects entire script
 const SHOULD_LOG_EVERY_EVENT = true;
 const SHOULD_AUTOCREATE_FOLDERS = true; // Automatically create folders in Drive if no ID is found
@@ -88,12 +92,14 @@ const ARCHIVIO_LOG_SHEET_NAME = 'ARCHIVIO_LOG';
 const TO_BE_ARCHIVED_FOLDER_NAME = "AAAAA DA ARCHIVIARE";
 const TO_BE_INVOICED_FOLDER_NAME = "AAAAA DA FATTURARE";
 
+// Hooks to the actual Drive sheets
 const CLIENTI_SHEET = SpreadsheetApp.openById(GESTIONE_LAVORI_SPREADSHEET_ID).getSheetByName(CLIENTI_SHEET_NAME);
 const LAVORI_SHEET = SpreadsheetApp.openById(GESTIONE_LAVORI_SPREADSHEET_ID).getSheetByName(LAVORI_SHEET_NAME);
 const LOGS_SHEET = SpreadsheetApp.openById(GESTIONE_LAVORI_SPREADSHEET_ID).getSheetByName(LOGS_SHEET_NAME);
 const RELATED_FILES_SHEET = SpreadsheetApp.openById(GESTIONE_LAVORI_SPREADSHEET_ID).getSheetByName(RELATED_FILES_SHEET_NAME);
 const TEST_SHEET = SpreadsheetApp.openById(GESTIONE_LAVORI_SPREADSHEET_ID).getSheetByName('TEST');
 
+// Sheets copies in the form of 2d arrays, for better overall performance and ease of access
 const CLIENTI_TABLE = CLIENTI_SHEET.getRange(1, 1, CLIENTI_SHEET.getLastRow(), CLIENTI_SHEET.getLastColumn()).getValues();
 const LAVORI_TABLE = LAVORI_SHEET.getRange(1, 1, LAVORI_SHEET.getLastRow(), LAVORI_SHEET.getLastColumn()).getValues();
 const LOGS_TABLE = LOGS_SHEET.getRange(1, 1, LOGS_SHEET.getLastRow(), LOGS_SHEET.getLastColumn()).getValues();
@@ -117,6 +123,7 @@ const LAVORI_RIFERIMENTO_COLUMN = 3;
 const LAVORI_STATO_COLUMN = 4;
 const LAVORI_NOTE_LAVORO_COLUMN = 5;
 const LAVORI_AGENTE_COLUMN = 7;
+const LAVORI_DRIVEFOLDERID_COLUMN = 8;
 
 const CLIENTI_ID_COLUMN = 1;
 const CLIENTI_NOME_COLUMN = 2;
@@ -125,6 +132,20 @@ const LOG_ID_COLUMN = 1;
 const LOG_REF_TO_LAVORI_COLUMN = 2;
 
 const RELATED_FILES_REF_TO_LAVORI_COLUMN = 2;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 function test() {  
@@ -472,6 +493,90 @@ function countFoldersContainingThisId(id) {
 }
 
 
+
+function maintainDriveFolderIDs() {
+  //
+  //
+  // !!! WARNING !!! this function uses sheet.setValue() or writes to the actual app's database in some way.
+  //
+  //
+
+  IS_DEBUGGING_EXECUTION = true; // disables all unnecessary logs in other functions for this execution
+
+
+  // Function assumes no empty rows are present in LAVORI sheet
+  deleteEmptyRowsFromEverySheet();
+
+  // Info to gather and report later
+  let relevantLogs = ['Report for Drive folders maintenance: \n\n'];
+  let startTime = Date.now();
+
+  // An old version of this function used to call getAllFoldersWithRef() for every record.
+  // That was madness, since it unnecessarily cycled through all the actual folders N times.
+  // As usual, it is much faster to gather all the folders once, and then cycle the JS array
+  const allFolders = (() => {
+    const toReturn = [];
+    RELEVANT_FOLDERS_IDS.forEach( folder => {
+      const folderIterator = DriveApp.getFolderById(folder).getFolders();
+      while(folderIterator.hasNext()) {
+        let folder = folderIterator.next();
+        toReturn.push(folder);
+      }
+    });
+    return toReturn;
+  })();
+
+  const getMatchingFolders = (lavoroRef) => {
+    return allFolders.filter( folder => folder.getName().includes(lavoroRef));
+  }
+
+  LAVORI_TABLE.forEach( (lavoro, i) => { // REMINDER: "lavoro" is an entire row in the sheet. Here, an array
+    if(i === 0) return;
+
+    const lavoroObject = createLavoroObjectFromLavoroRow(i + 1);
+
+    Logger.log(`${i} Checking folder for ${lavoroObject.cliente} - ${lavoroObject.riferimento}`);
+
+    // If the record does not contain an id for the folder, look for it
+    if(lavoro[LAVORI_DRIVEFOLDERID_COLUMN - 1] === '') {
+      const foldersFound = getMatchingFolders(lavoro[LAVORI_ID_COLUMN - 1]);
+      // If a single folder is correctly found, assign it to the record in the actual sheet
+      if(foldersFound.length != 1) {
+        relevantLogs.push(`!!! CHECK ${lavoroObject.cliente} - ${lavoroObject.riferimento}: no folders or too many found.`);
+      }
+      else{
+        // assign proper folder id to record
+        LAVORI_SHEET.getRange(lavoroObject.row, LAVORI_DRIVEFOLDERID_COLUMN).setValue(foldersFound[0].getId());
+        relevantLogs.push(`OK - assigned ${foldersFound[0].getId()} to ${lavoroObject.riferimento}`);
+      }
+    }
+    else {
+    // If the record already contains a folder Id, check if related folder contains the proper hook
+
+      // This try block is necessary. DriveApp.getFolderById() throws if no folder is found.
+      try {
+        const folder = DriveApp.getFolderById(lavoroObject.folderId);
+        // If a folder is found, check if it contains a correct hook
+        if(!folder.getName().includes(lavoroObject.ref)) {
+          relevantLogs.push(`!!! CHECK ${lavoroObject.cliente} - ${lavoroObject.riferimento}: record contains folder's id but folder's hook is incorrect`);
+        }
+      } catch(e) {
+        // If no folder with that id is found, report it but keep going
+        relevantLogs.push(`!!! CHECK ${lavoroObject.cliente} - ${lavoroObject.riferimento}: there was an error retrieving a folder with id (${lavoroObject.folderId}) `);
+      }
+    }
+  });
+
+  // If nothing has been done
+  if(relevantLogs.length === 1) {
+    relevantLogs.push('Folders are fine, nothing to do.');
+  }
+
+  relevantLogs.push(`\n\n\nMaintenance done in ${Date.now() - startTime} ms`);
+  relevantLogs = relevantLogs.join('\n');
+  sendEmailTo(MAIN_NOTIFICATION_EMAIL, relevantLogs, 'Report controllo cartelle Drive');
+}
+
 function checkFoldersAndIDs() {
   // This function checks that every id has a corresponding folder whose name contains that ID
   // IT DOESN'T CHECK if the rest of the name is how it should be. Here we just need to make sure
@@ -482,7 +587,7 @@ function checkFoldersAndIDs() {
   let folders = DriveApp.getFolderById(LAVORI_IN_CORSO_FOLDER_ID).getFolders();
   while(folders.hasNext()) {
     const folderName = folders.next().getName();
-    if([TO_BE_INVOICED_FOLDER_NAME, TO_BE_ARCHIVED_FOLDER_NAME].some( name => name === folderName)) {
+    if([TO_BE_INVOICED_FOLDER_NAME, TO_BE_ARCHIVED_FOLDER_NAME, ...FOLDERNAMES_TO_IGNORE].some( name => name === folderName)) {
       continue;
     }
     folderNames.push(folderName);
@@ -506,7 +611,6 @@ function checkFoldersAndIDs() {
   LAVORI_TABLE.forEach( (row, i) => { // i === 0 is skipped because it's the title row
     if(row[LAVORI_ID_COLUMN - 1] != '' && i != 0) IDs.push(row[0]);
   });
-
 
   let results = {
     foundFolderNames: [],
@@ -570,6 +674,12 @@ function checkFoldersAndIDs() {
 
 
 
+
+
+
+
+
+
 function createLavoroObjectFromRef(lavoroRef) {
   if(typeof lavoroRef != 'string') {
     throw Error('createLavoroObjectFromRef(): invalid argument');
@@ -581,22 +691,18 @@ function createLavoroObjectFromRef(lavoroRef) {
         return i + 1;
       }
     }
-    if(!row) {
-      throw Error(`LAVORO not found for this ref: ${lavoroRef}`);
-  }})();
+    throw Error(`createLavoroObjectFromRef(): LAVORO not found for this ref: ${lavoroRef}`);
+  })();
 
   const lavoroObject = createLavoroObjectFromLavoroRow(lavoroRow);
   
   return lavoroObject;
 }
 
-
-
 function createLavoroObjectFromLavoroRow(lavoroRow) {
   if(typeof lavoroRow != 'number' || lavoroRow < 2) {
-    throw Error('invalid row');
+    throw Error(`createLavoroObjectFromLavoroRow() was fed invalid row: ${lavoroRow}`);
   }
-
   const refToCliente = LAVORI_TABLE[lavoroRow - 1][LAVORI_REF_TO_CLIENTE_COLUMN - 1];
   const clienteName = (() => {
     for(let i = 0; i < CLIENTI_TABLE.length; i++) {
@@ -604,9 +710,8 @@ function createLavoroObjectFromLavoroRow(lavoroRow) {
         return CLIENTI_TABLE[i][CLIENTI_NOME_COLUMN - 1];
       }
     }
-    if(!row) {
-      throw Error(`LAVORO not found for this ref: ${lavoroRef}`);
-  }})();
+    throw Error(`createLavoroObjectFromLavoroRow(): CLIENTE not found for this ref: ${refToCliente}`);
+  })();
 
   const lavoroObject = {
     row: lavoroRow,
@@ -614,7 +719,8 @@ function createLavoroObjectFromLavoroRow(lavoroRow) {
     refToCliente: refToCliente,
     cliente: clienteName,
     riferimento: LAVORI_TABLE[lavoroRow - 1][LAVORI_RIFERIMENTO_COLUMN - 1],
-    stato: LAVORI_TABLE[lavoroRow - 1][LAVORI_STATO_COLUMN - 1]
+    stato: LAVORI_TABLE[lavoroRow - 1][LAVORI_STATO_COLUMN - 1],
+    folderId: LAVORI_TABLE[lavoroRow - 1][LAVORI_DRIVEFOLDERID_COLUMN - 1]
   }
 
   return lavoroObject;
@@ -629,6 +735,7 @@ function printLavoroInfo(lavoroObject) {
   Logger.log("Name should be: " + whatFolderNameShouldBe);
 }
 
+
 function getAllFoldersWithRef(lavoroRef) {
   if(lavoroRef.length != 8 && typeof lavoroRef != 'string') {
     throw Error(`${lavoroRef} is not a valid argument for getAllFoldersWithRef().`);
@@ -636,10 +743,10 @@ function getAllFoldersWithRef(lavoroRef) {
   let foundFolders = [];
   let folders;
 
-  Logger.log(`getAllFoldersWithRef(${lavoroRef})`);
+  if(!IS_DEBUGGING_EXECUTION) Logger.log(`getAllFoldersWithRef(${lavoroRef})`);
 
   // Look for folder in Lavori In Corso
-  Logger.log(`Checking folder LAVORI_IN_CORSO)`);
+  if(!IS_DEBUGGING_EXECUTION) Logger.log(`Checking folder LAVORI_IN_CORSO)`);
   folders = DriveApp.getFolderById(LAVORI_IN_CORSO_FOLDER_ID).getFolders();
   while(folders.hasNext()) {
     let folder = folders.next();
@@ -648,7 +755,7 @@ function getAllFoldersWithRef(lavoroRef) {
     }
   }
   // Look for folder in Da Fatturare
-  Logger.log(`Checking folder TO_BE_INVOICED)`);
+  if(!IS_DEBUGGING_EXECUTION) Logger.log(`Checking folder TO_BE_INVOICED)`);
   folders = DriveApp.getFolderById(TO_BE_INVOICED_FOLDER_ID).getFolders();
   while(folders.hasNext()) {
     let folder = folders.next();
@@ -657,7 +764,7 @@ function getAllFoldersWithRef(lavoroRef) {
     }
   }
   // Look for folders in Da Archiviare
-  Logger.log(`Checking folder TO_BE_ARCHIVED)`);
+  if(!IS_DEBUGGING_EXECUTION) Logger.log(`Checking folder TO_BE_ARCHIVED)`);
   folders = DriveApp.getFolderById(TO_BE_ARCHIVED_FOLDER_ID).getFolders();
   while(folders.hasNext()) {
     let folder = folders.next();
@@ -700,11 +807,21 @@ function renameFolderCorrectly(folder, lavoroObject) {
 }
 
 function createLavoroFolder(lavoroObject) {
+  //
+  //
+  // !!! WARNING !!! this function uses sheet.setValue() or writes to the actual app's database in some way.
+  //
+  //
   if(!SHOULD_AUTOCREATE_FOLDERS) { return; }
   const whatFolderNameShouldBe = getWhatFolderNameShouldBeForThisLavoro(lavoroObject.row);
   const mainFolder = DriveApp.getFolderById(LAVORI_IN_CORSO_FOLDER_ID);
   const newFolder = mainFolder.createFolder(whatFolderNameShouldBe);
   Logger.log(`New folder has been created: ${newFolder}`);
+
+  // Now we add the new folder Id to the proper record in the database sheet:
+  LAVORI_SHEET.getRange(lavoroObject.row, LAVORI_DRIVEFOLDERID_COLUMN).setValue(newFolder.getId());
+  Logger.log(`Folder id "${newFolder.getId()}" has been attached to record at line ${lavoroObject.row} for lavoro ${lavoroObject.riferimento}`);
+
   return newFolder;
 }
 
@@ -859,3 +976,5 @@ function onSheetEdits(e) {
 
   Logger.log("End of trigger in file 'triggers.gs'");
 }
+
+
