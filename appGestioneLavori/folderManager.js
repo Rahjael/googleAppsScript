@@ -2,14 +2,18 @@ const GESTIONE_LAVORI_SPREADSHEET_ID = '';
 const LAVORI_IN_CORSO_FOLDER_ID = '';
 const TO_BE_INVOICED_FOLDER_ID = '';
 const TO_BE_ARCHIVED_FOLDER_ID = '';
+const INVOICED_FOLDER_ID = '';
 
-const FOLDERNAMES_TO_IGNORE = [''];
+const FOLDERNAMES_TO_IGNORE = [];
 
 
 const ADMIN_EMAIL = '';
 const MAIN_AGENT_EMAIL = '';
+//const ADMINISTRATIVE_OFFICE_EMAIL = ''
 const MAIN_NOTIFICATION_EMAIL = '';
 const NOTIFICATION_ADDRESSES = [ADMIN_EMAIL, MAIN_AGENT_EMAIL, MAIN_NOTIFICATION_EMAIL];
+
+const EMAIL_OBJECT = '';
 
 
 
@@ -45,7 +49,7 @@ const NOTIFICATION_ADDRESSES = [ADMIN_EMAIL, MAIN_AGENT_EMAIL, MAIN_NOTIFICATION
 // spreadsheet that are affected.
 
 
-const PRIVATE_INFO = [GESTIONE_LAVORI_SPREADSHEET_ID, LAVORI_IN_CORSO_FOLDER_ID, TO_BE_INVOICED_FOLDER_ID, TO_BE_ARCHIVED_FOLDER_ID, ADMIN_EMAIL, MAIN_AGENT_EMAIL, ...NOTIFICATION_ADDRESSES];
+const PRIVATE_INFO = [GESTIONE_LAVORI_SPREADSHEET_ID, LAVORI_IN_CORSO_FOLDER_ID, TO_BE_INVOICED_FOLDER_ID, TO_BE_ARCHIVED_FOLDER_ID, ...NOTIFICATION_ADDRESSES];
 
 if(PRIVATE_INFO.some( data => data === '' || data === undefined)) {
   throw Error('Did you forget to fill in private info?');
@@ -78,32 +82,34 @@ const SHOULD_CHECK_LOG_SHEET_EDITS = true; // Currently not in use
 const RELEVANT_FOLDERS_IDS = [
   LAVORI_IN_CORSO_FOLDER_ID,
   TO_BE_INVOICED_FOLDER_ID,
-  TO_BE_ARCHIVED_FOLDER_ID
+  TO_BE_ARCHIVED_FOLDER_ID,
+  INVOICED_FOLDER_ID
 ];
 
 
-const LAVORI_SHEET_NAME = "LAVORI";
-const CLIENTI_SHEET_NAME = "CLIENTI";
-const LOGS_SHEET_NAME = "LOG";
-const RELATED_FILES_SHEET_NAME = "FILE COLLEGATI";
+const LAVORI_SHEET_NAME = 'LAVORI';
+const CLIENTI_SHEET_NAME = 'CLIENTI';
+const LOGS_SHEET_NAME = 'LOG';
+const FILE_COLLEGATI_SHEET_NAME = 'FILE_COLLEGATI';
 const ARCHIVIO_LAVORI_SHEET_NAME = 'ARCHIVIO_LAVORI';
 const ARCHIVIO_LOG_SHEET_NAME = 'ARCHIVIO_LOG';
 
-const TO_BE_ARCHIVED_FOLDER_NAME = "AAAAA DA ARCHIVIARE";
-const TO_BE_INVOICED_FOLDER_NAME = "AAAAA DA FATTURARE";
+const TO_BE_ARCHIVED_FOLDER_NAME = 'AAAAA DA ARCHIVIARE';
+const TO_BE_INVOICED_FOLDER_NAME = 'AAAAA DA FATTURARE';
+const INVOICED_FOLDER_NAME = 'AAAAA FATTURATO';
 
 // Hooks to the actual Drive sheets
 const CLIENTI_SHEET = SpreadsheetApp.openById(GESTIONE_LAVORI_SPREADSHEET_ID).getSheetByName(CLIENTI_SHEET_NAME);
 const LAVORI_SHEET = SpreadsheetApp.openById(GESTIONE_LAVORI_SPREADSHEET_ID).getSheetByName(LAVORI_SHEET_NAME);
 const LOGS_SHEET = SpreadsheetApp.openById(GESTIONE_LAVORI_SPREADSHEET_ID).getSheetByName(LOGS_SHEET_NAME);
-const RELATED_FILES_SHEET = SpreadsheetApp.openById(GESTIONE_LAVORI_SPREADSHEET_ID).getSheetByName(RELATED_FILES_SHEET_NAME);
+const FILE_COLLEGATI_SHEET = SpreadsheetApp.openById(GESTIONE_LAVORI_SPREADSHEET_ID).getSheetByName(FILE_COLLEGATI_SHEET_NAME);
 const TEST_SHEET = SpreadsheetApp.openById(GESTIONE_LAVORI_SPREADSHEET_ID).getSheetByName('TEST');
 
 // Sheets copies in the form of 2d arrays, for better overall performance and ease of access
 const CLIENTI_TABLE = CLIENTI_SHEET.getRange(1, 1, CLIENTI_SHEET.getLastRow(), CLIENTI_SHEET.getLastColumn()).getValues();
 const LAVORI_TABLE = LAVORI_SHEET.getRange(1, 1, LAVORI_SHEET.getLastRow(), LAVORI_SHEET.getLastColumn()).getValues();
 const LOGS_TABLE = LOGS_SHEET.getRange(1, 1, LOGS_SHEET.getLastRow(), LOGS_SHEET.getLastColumn()).getValues();
-const RELATED_FILES_TABLE = RELATED_FILES_SHEET.getRange(1, 1, RELATED_FILES_SHEET.getLastRow(), RELATED_FILES_SHEET.getLastColumn()).getValues();
+const FILE_COLLEGATI_TABLE = FILE_COLLEGATI_SHEET.getRange(1, 1, FILE_COLLEGATI_SHEET.getLastRow(), FILE_COLLEGATI_SHEET.getLastColumn()).getValues();
 
 // Consider the following:
 // All calls to the actual Drive files and folders should be moved in the above consts section,
@@ -131,7 +137,7 @@ const CLIENTI_NOME_COLUMN = 2;
 const LOG_ID_COLUMN = 1;
 const LOG_REF_TO_LAVORI_COLUMN = 2;
 
-const RELATED_FILES_REF_TO_LAVORI_COLUMN = 2;
+const FILE_COLLEGATI_REF_TO_LAVORI_COLUMN = 2;
 
 
 
@@ -587,7 +593,7 @@ function checkFoldersAndIDs() {
   let folders = DriveApp.getFolderById(LAVORI_IN_CORSO_FOLDER_ID).getFolders();
   while(folders.hasNext()) {
     const folderName = folders.next().getName();
-    if([TO_BE_INVOICED_FOLDER_NAME, TO_BE_ARCHIVED_FOLDER_NAME, ...FOLDERNAMES_TO_IGNORE].some( name => name === folderName)) {
+    if([...RELEVANT_FOLDERS_IDS, ...FOLDERNAMES_TO_IGNORE].some( name => name === folderName)) {
       continue;
     }
     folderNames.push(folderName);
@@ -606,6 +612,14 @@ function checkFoldersAndIDs() {
     const folderName = folders.next().getName();
     folderNames.push(folderName);
   }
+
+  // Check INVOICED
+  folders = DriveApp.getFolderById(INVOICED_FOLDER_ID).getFolders();
+  while(folders.hasNext()) {
+    const folderName = folders.next().getName();
+    folderNames.push(folderName);
+  }
+
 
   let IDs = [];
   LAVORI_TABLE.forEach( (row, i) => { // i === 0 is skipped because it's the title row
@@ -682,7 +696,7 @@ function checkFoldersAndIDs() {
 
 function createLavoroObjectFromRef(lavoroRef) {
   if(typeof lavoroRef != 'string') {
-    throw Error('createLavoroObjectFromRef(): invalid argument');
+    throw Error(`createLavoroObjectFromRef(): invalid argument: ${lavoroRef}`);
   }
 
   const lavoroRow = (() => {
@@ -788,6 +802,9 @@ function moveFolderToCorrectParentFolder(folder, lavoroObject) {
   else if(lavoroObject.stato === 'Da Fatturare') {
     folder.moveTo(DriveApp.getFolderById(TO_BE_INVOICED_FOLDER_ID));
   }
+  else if(lavoroObject.stato === 'Fatturato') {
+    folder.moveTo(DriveApp.getFolderById(INVOICED_FOLDER_ID));
+  }
   else {
     folder.moveTo(DriveApp.getFolderById(LAVORI_IN_CORSO_FOLDER_ID));
   }
@@ -866,7 +883,7 @@ function getLavoriToWorkOn(sheetName, activeRange) {
       throw Error('Id is empty. Has cliente been deleted?');
     }
     Logger.log("Lavori refs are being checked...");    
-    const lavoroRows = getLavoriRowsWithThisClienteRef(clienteRef); 
+    const lavoroRows = getLavoriRowsWithThisClienteRef(clienteRef);
     if(lavoroRows.length === 0) {
       throw Error(`A clienteRow has changed but there are no lavori that reference this clienteRow. clienteRow: ${clienteRow}`);
     }
