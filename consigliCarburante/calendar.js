@@ -5,8 +5,28 @@ function test() {
 }
 
 
+
+
+
+function getNearbyStations(maxDist, maxTime) {
+
+
+
+
+  
+}
+
+
+
+
+
+
+
+
+
 function getFormattedTodayEvents() {
   // Fetch events from Calendar, return array of event objects:
+  // XXX events without address will be ignored
   /*
   {
     title: 
@@ -39,7 +59,7 @@ function getFormattedTodayEvents() {
         longitude: longitude,
         startTime: event.getStartTime(),
         location: location
-      }]);    
+      }]);
     }
     return eventsContainer;
 }, []);
