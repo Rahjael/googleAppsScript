@@ -1,13 +1,21 @@
 
-function test() {
+function mapTest() {
   const stations = getStationsData();
 
   const events = getFormattedTodayEvents();
 
+  const testEvents = events.filter(event => {
+    return event.title === 'test';
+  }).map(event => event.location);
+
+  const distanceValues = getDrivingDistanceAndDuration(testEvents[0], testEvents[1]);
+
+  Logger.log(distanceValues);
+
   let startPoint = events[1];
   let endPoint = stations[1];
 
-
+  /*
   Logger.log(startPoint);
   Logger.log(endPoint);
 
@@ -18,7 +26,7 @@ function test() {
   Logger.log(address2);
 
   Logger.log(getDrivingDistanceAndDuration(address1, address2));
-
+  */
 }
 
 
@@ -55,8 +63,28 @@ function getDrivingDistanceAndDuration(address1, address2) {
           */
   const directions = directionFinder.getDirections();
 
+  /*
+  // Debugging info
+  Logger.log(directions.routes[0].legs[0].distance.text);
+  Logger.log(directions.routes[0].legs[0].distance.value);
+  Logger.log(directions.routes[0].legs[0].duration.text);
+  Logger.log(directions.routes[0].legs[0].duration.value);
+  */
+
+  try {
+
+
   return {
     distance: directions.routes[0].legs[0].distance.value,
     duration: directions.routes[0].legs[0].duration.value
+  }
+  }
+  catch(e) {
+    Logger.log(address1);
+    Logger.log(address2);
+
+    Logger.log(directions.routes)
+
+    throw Error('crashed');
   }
 }

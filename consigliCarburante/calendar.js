@@ -1,22 +1,56 @@
 
 function test() {
-  Logger.log(getFormattedTodayEvents());
-
-}
-
-
-
-
-
-function getNearbyStations(maxDist, maxTime) {
-
-
-
-
   
+
+  // Get all stations closer than limits, for every event of the day
+  const eventsOfToday = getFormattedTodayEvents();
+  const stationsNearby = eventsOfToday.reduce((stations, event) => {
+    const stationsNearby = getStationsCloserThan(event.location, CONFIG.MAX_DISTANCE, CONFIG.MAX_DURATION);
+    if(stationsNearby.length > 0) {
+      return stations.concat(stationsNearby);
+    }
+    else {
+      return stations;
+    }
+  }, []);
+
+  Logger.log(stationsNearby);
+
 }
 
 
+
+function getTuscanyStations() {
+  const stations = getStationsData().filter(station => {
+    return CONFIG.PROVINCES.some( province => {
+      return province === station.provincia;
+    });
+  });
+  Logger.log(`Found ${stations.length} stations in Tuscany`);
+  return stations;
+}
+
+function getStationsCloserThan(targetAddress, maxDist, maxTime) {
+  // maxDist is in km
+  // maxTime is in seconds
+
+  if(!TEMP_DATA.TUSCANY_STATIONS_LOADED) {
+    TEMP_DATA.TUSCANY_STATIONS = getTuscanyStations();
+    TEMP_DATA.TUSCANY_STATIONS_LOADED = true;
+  }
+
+
+  const stations = TEMP_DATA.TUSCANY_STATIONS.filter(station => {
+    let stationAddress;
+    let separation;
+      stationAddress = gpsToAddress(station.latitude, station.longitude);
+      separation = getDrivingDistanceAndDuration(targetAddress, stationAddress);
+    
+    return separation.distance <= maxDist || separation.duration <= maxTime;
+  });
+
+  return stations;
+}
 
 
 
@@ -40,25 +74,37 @@ function getFormattedTodayEvents() {
   const eventsOfToday = CalendarApp.getCalendarById(CONFIG.CALENDAR_ID).getEventsForDay(today);
 
   const geocoder = Maps.newGeocoder().setLanguage('it').setRegion('it');
-
+/*
   eventsOfToday.forEach(event => {
     Logger.log(event.getLocation());
   });
-
+*/
   const eventsToReturn = eventsOfToday.reduce((eventsContainer, event,) => {
     const location = event.getLocation();
 
+/*
+    Logger.log('Event and location:');
+    Logger.log(event.getTitle());
+    Logger.log(location);
+*/
     if(location) {
       const coords = geocoder.geocode(location); // This returns a JSON object
       const latitude = coords.results[0].geometry.location.lat;
       const longitude = coords.results[0].geometry.location.lng;
+      const fixedLocation = geocoder.reverseGeocode(latitude, longitude).results[0].formatted_address;
+
+      /*
+      Logger.log(`lat ${latitude}`);
+      Logger.log(`lat ${longitude}`);
+      Logger.log(`fixedLocation ${fixedLocation}`);
+      */
 
       eventsContainer = eventsContainer.concat([{
         title: event.getTitle(),
         latitude: latitude,
         longitude: longitude,
         startTime: event.getStartTime(),
-        location: location
+        location: fixedLocation
       }]);
     }
     return eventsContainer;

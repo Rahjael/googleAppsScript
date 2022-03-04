@@ -2,7 +2,7 @@ function performDailyRoutine() {
   downloadOpenDataCSVsToDrive();
   //updateStationsDatabase();
   //updatePricesDatabase();
-  //Logger.log('Daily routine correctly performed.');
+  Logger.log('Daily routine correctly performed.');
 }
 
 function downloadOpenDataCSVsToDrive() {
@@ -10,15 +10,6 @@ function downloadOpenDataCSVsToDrive() {
   downloadStationsCSV();
 }
 
-function generateUID() {
-  // Helper function to generate a UNIQUEID the same way appsheet does
-  let values = '0123456789abcdefghijklmnopqrstuvwxyz';
-  let UID = '';
-  for(let i = 0; i < 8; i++) {
-    UID += values.charAt(Math.floor(Math.random() * values.length));
-  }
-  return UID;
-}
 
 function parseCSVStringDataTo2dArray(stringData) {
   const rows = stringData.split('\n');
@@ -73,7 +64,24 @@ function getStationsData() {
   const startTime = Date.now();
   // Get CSV data as a string from the file, and turn it into a js 2d array
   const stringData = DriveApp.getFolderById(CONFIG.APP_FOLDER_ID).getFilesByName(CONFIG.STATIONS_CSV_FILENAME).next().getBlob().getDataAsString();
-  const data = parseCSVStringDataTo2dArray(stringData); // 2d array
+  let data = parseCSVStringDataTo2dArray(stringData).map(row => {
+    return {
+      idImpianto: row[0],
+      gestore: row[1],
+      bandiera: row[2],
+      tipoImpianto: row[3],
+      nomeImpianto: row[4],
+      indirizzo: row[5],
+      comune: row[6],
+      provincia: row[7],
+      latitude: parseLatLong(row[8]),
+      longitude: parseLatLong(row[9])
+    }
+  });
+
+  // Remove first item, since it's just the header of the file
+  data.shift();
+  
   return data;
 }
 
@@ -81,9 +89,9 @@ function getPricesData() {
   const startTime = Date.now();
   // Get CSV data as a string from the file, and turn it into a js 2d array
   const stringData = DriveApp.getFolderById(CONFIG.APP_FOLDER_ID).getFilesByName(CONFIG.PRICES_CSV_FILENAME).next().getBlob().getDataAsString();
-  const data = parseCSVStringDataTo2dArray(stringData); // 2d array
+  let data = parseCSVStringDataTo2dArray(stringData); // 2d array
 
-  // Replace yes/no value to make it more easily understandable to AppSheet
+  // Replace yes/no value to make it more easily understandable
   data.forEach( row => {
     if(row[4] == 1) {
       row[4] = true;
@@ -104,7 +112,7 @@ function downloadPricesCSV() {
   // This returns an HTTPResponse object
   const response = UrlFetchApp.fetch(url);
 
-  // If response is good
+  // If response is good, delete old files and replace them
   if(response.getResponseCode() === 200) {
     // Delete old file
     const iterator = DriveApp.getFolderById(foldername).getFilesByName(filename);
