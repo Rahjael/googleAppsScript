@@ -3,10 +3,30 @@
  */
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
  function sendEmailNotification(addresses, message, subject = CONFIG.EMAIL_DEFAULT_SUBJECT) {
   MailApp.sendEmail(addresses, subject, message);
   Logger.log(`Email sent to ${addresses}`);
 }
+
+/*
+Exception: I parametri (number[],String,String) non corrispondono alla firma del metodo per MailApp.sendEmail.
+    at sendEmailNotification(functions:7:11)
+    at scannerFolderCleanup(functions:60:5)
+    at dailyCleanup(functions:13:3)
+*/
 
 
 function dailyCleanup() {
@@ -17,7 +37,7 @@ function dailyCleanup() {
 
 // THIS FUNCTION IS READY BUT ACTIVATOR IS NOT SET
 function scannerFolderCleanup() {
-  Logger.log('Initiating root folder cleanup...');
+  Logger.log('Initiating scanner folder cleanup...');
 
   // This will be reused later, no const needed
   let notificationBody = '\n\nI seguenti file erano presenti nella cartella "Scansioni su computer Palma" e sono stati eliminati: \n\n';
@@ -57,7 +77,7 @@ function scannerFolderCleanup() {
   else {
     deletedFiles = '- ' + deletedFiles.join('\n- ');
     notificationBody += deletedFiles;
-    sendEmailNotification(CONFIG.NOTIFICATION_ADDRESSES, notificationBody);
+    sendEmailNotification(CONFIG.NOTIFICATION_ADDRESSES.join(','), notificationBody);
     //Logger.log(`FAKE: sent email ${notificationBody}`);
     Logger.log('Cleanup done.');
   }
