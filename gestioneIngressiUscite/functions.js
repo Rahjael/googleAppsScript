@@ -1,12 +1,23 @@
+function test() {
+  let referenceDate = new Date(2022,0,11);
+  referenceDate.setMonth((((new Date(2022,0,11)).getMonth() + 11) - 1) % 12);
+
+  Logger.log((new Date(2022,3,11)).getMonth())
+  Logger.log((((new Date(2022,3,11)).getMonth() + 12) - 1) % 12)
+
+
+  let date1 = new Date(2022, 10, 21);
+  let date2 = new Date(2022,10, 22);
+
+  Logger.log(date2 - date1);
+}
 function dailyRoutine() {
   let data = getAllData();
-  let date = new Date(2022, 10, 20);
-  // let date = new Date();
-
+  //let date = new Date(2022, 10, 20);
+  let date = new Date();
   let errors = checkRecordsForDate(data, date);
-  if(errors.length) dailyErrorReport(errors); 
+  if(errors.length) dailyErrorReport(errors);
 }
-
 function checkRecordsForDate(records, date) {
   date = date.toLocaleDateString();
   const errors = [];
@@ -24,10 +35,12 @@ function checkRecordsForDate(records, date) {
         break;
       }
     }
+    if (records[user].length % 2 != 0) {
+      errors.push(`ATTENZIONE: rilevato un errore nei record del giorno ${date} per l'utente ${user}`);
+    }
   });  
   return errors;
 }
-
 function dailyErrorReport(errors) {
   let subject = 'Errore in orario dipendenti'
   let body = `Sono stati rilevati errori per i seguenti record: \n\n`;
@@ -63,23 +76,6 @@ function sortByDateForEveryUser(data) {
   //CONFIG.USEREMAILS.forEach(useremail => Logger.log(recordsByUser[useremail]));
   return recordsByUser;
 }
-
-
-function test() {
-  let referenceDate = new Date(2022,0,11);
-  referenceDate.setMonth((((new Date(2022,0,11)).getMonth() + 11) - 1) % 12);
-
-  Logger.log((new Date(2022,3,11)).getMonth())
-  Logger.log((((new Date(2022,3,11)).getMonth() + 12) - 1) % 12)
-
-
-  let date1 = new Date(2022, 10, 21);
-  let date2 = new Date(2022,10, 22);
-
-  Logger.log(date2 - date1);
-}
-
-
 function monthlyRoutine() {
   const data = getAllData(); // "data" now contains all the records in JS format
   //data.forEach(item => Logger.log(item));
